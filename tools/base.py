@@ -1,17 +1,24 @@
+# tools/base.py
 from tasks.agent_types import AGENT_TYPES
 from skills.skill_tool import SKILL_TOOL
 from tasks.task_tool import TASK_TOOL
-
 
 BASE_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Run shell command.",
+            "description": "Run shell command in 'zzy' conda environment. Use background=True for long-running tasks.",
             "parameters": {
                 "type": "object",
-                "properties": {"command": {"type": "string"}},
+                "properties": {
+                    "command": {"type": "string", "description": "Command to execute."},
+                    "background": {
+                        "type": "boolean",
+                        "description": "If true, runs command in background (nohup) and returns PID.",
+                        "default": False
+                    }
+                },
                 "required": ["command"],
             },
         },
@@ -25,7 +32,7 @@ BASE_TOOLS = [
                 "type": "object",
                 "properties": {
                     "path": {"type": "string"},
-                    "limit": {"type": "integer"},
+                    "limit": {"type": "integer", "description": "Max lines to read"},
                 },
                 "required": ["path"],
             },
@@ -35,12 +42,17 @@ BASE_TOOLS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Write to file.",
+            "description": "Write or append content to a file.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {"type": "string"},
                     "content": {"type": "string"},
+                    "append": {
+                        "type": "boolean",
+                        "description": "If true, appends to file instead of overwriting.",
+                        "default": False
+                    }
                 },
                 "required": ["path", "content"],
             },
@@ -50,7 +62,7 @@ BASE_TOOLS = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Replace text in file.",
+            "description": "Replace exact text in a file.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -92,17 +104,20 @@ BASE_TOOLS = [
     },
 ]
 
-
 ALL_TOOLS = BASE_TOOLS + [TASK_TOOL, SKILL_TOOL]
-
 
 def get_tools_for_agent(agent_type: str) -> list[dict]:
     """Filter tools based on agent type."""
     allowed = AGENT_TYPES.get(agent_type, {}).get("tools", "*")
     if allowed == "*":
-        return BASE_TOOLS
-    return [t for t in BASE_TOOLS if t["function"]["name"] in allowed]
-
+        return ALL_TOOLS  # Use ALL_TOOLS to include Task/Skill for full agents
+    
+    # Filter BASE_TOOLS
+    tools = [t for t in BASE_TOOLS if t["function"]["name"] in allowed]
+    
+    # Optionally allow explicit inclusion of Task/Skill if listed in strings
+    # (Though current AGENT_TYPES don't list them explicitly)
+    return tools
 
 __all__ = [
     "BASE_TOOLS",
@@ -111,5 +126,3 @@ __all__ = [
     "ALL_TOOLS",
     "get_tools_for_agent",
 ]
-
-
