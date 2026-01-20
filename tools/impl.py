@@ -4,15 +4,15 @@ import subprocess
 import time
 import json
 import shlex
+import psutil
+from tools.job_manager import JOBS
 
 from tasks.agent_types import AGENT_TYPES
 from config import WORKDIR, MODEL, client
 from skills.loader import SKILLS
-from tools.base import get_tools_for_agent, TodoManager, TODO # 假设 TodoManager 移到了 base 或保持在此处
-# 注意：如果 TodoManager 仍在此文件中定义，请保留原有的 TodoManager 类代码
-
-# (为了简洁，这里省略 TodoManager 类的定义，因为它没有逻辑变化)
-# 请保留你原始代码中的 class TodoManager ... 和 TODO = TodoManager()
+from tools.base import get_tools_for_agent
+from tools.todo_manager import TODO
+from utils.colors import color, FG_CYAN, FG_MAGENTA
 
 def safe_path(p: str) -> Path:
     """Ensure path stays within workspace."""
@@ -57,10 +57,10 @@ def run_bash(cmd: str, background: bool = False) -> str:
                 return f"Error starting background job: {r.stderr}"
             
             pid = r.stdout.strip()
-            return (f"Background process started.\n"
-                    f"PID: {pid}\n"
-                    f"Log file: {log_file}\n"
-                    f"Action: Use 'read_file {log_file}' to check progress later.")
+            JOBS.add_job(pid, cmd, log_file)
+            return (f"Background task started. PID: {pid}\n"
+                    f"Log: {log_file}\n"
+                    f"System Note: I have registered this job. I will update you on its status in every turn.")
             
         else:
             # 前台阻塞运行
@@ -80,6 +80,27 @@ def run_bash(cmd: str, background: bool = False) -> str:
             
     except Exception as e:
         return f"Error: {e}"
+
+def run_wait(seconds: int) -> str:
+    """Agent 主动选择挂起，以等待后台任务"""
+    try:
+        seconds = int(seconds)
+    except Exception:
+        seconds = 10 # fallback
+
+    if seconds > 3600:
+        seconds = 3600
+    
+    print(color(f"    [System] Agent decided to wait for {seconds}s...", FG_MAGENTA))
+    
+    # 简单的睡眠
+    time.sleep(seconds)
+    
+    # 【修改】返回更明确的 JSON 风格或指令风格字符串
+    return (
+        f"SUCCESS: System time advanced by {seconds} seconds.\n"
+        f"Current Status: The wait is over. You should now verify the status of your background jobs using 'check_jobs' output or 'read_file' on logs."
+    )
 
 def run_read(path: str, limit: int | None = None) -> str:
     """Read file contents."""
@@ -216,6 +237,8 @@ def execute_tool(name: str, args: dict) -> str:
         return run_task(args["description"], args["prompt"], args["agent_type"])
     if name == "Skill":
         return run_skill(args["skill"])
+    if name == "wait":
+        return run_wait(args["seconds"])
     return f"Unknown tool: {name}"
 
 __all__ = [

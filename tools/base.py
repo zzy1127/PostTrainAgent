@@ -3,6 +3,7 @@ from tasks.agent_types import AGENT_TYPES
 from skills.skill_tool import SKILL_TOOL
 from tasks.task_tool import TASK_TOOL
 
+# 将 wait 混入基础工具集，不再特殊对待
 BASE_TOOLS = [
     {
         "type": "function",
@@ -102,21 +103,40 @@ BASE_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "wait",
+            "description": "Pause execution for a specific duration. ESSENTIAL for checking background task progress.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "seconds": {
+                        "type": "integer",
+                        "description": "Time to wait in seconds (e.g., 60).",
+                    }
+                },
+                "required": ["seconds"],
+            },
+        },
+    },
 ]
 
+# ALL_TOOLS 现在非常干净
 ALL_TOOLS = BASE_TOOLS + [TASK_TOOL, SKILL_TOOL]
 
 def get_tools_for_agent(agent_type: str) -> list[dict]:
     """Filter tools based on agent type."""
     allowed = AGENT_TYPES.get(agent_type, {}).get("tools", "*")
-    if allowed == "*":
-        return ALL_TOOLS  # Use ALL_TOOLS to include Task/Skill for full agents
     
-    # Filter BASE_TOOLS
+    # 1. 如果是全权限代理，直接给所有工具
+    if allowed == "*":
+        return ALL_TOOLS
+    
+    # 2. 如果是受限代理，在 BASE_TOOLS 里筛选
+    # (因为 wait 现在在 BASE_TOOLS 里了，所以它能被正确筛选出来！)
     tools = [t for t in BASE_TOOLS if t["function"]["name"] in allowed]
     
-    # Optionally allow explicit inclusion of Task/Skill if listed in strings
-    # (Though current AGENT_TYPES don't list them explicitly)
     return tools
 
 __all__ = [

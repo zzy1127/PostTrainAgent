@@ -5,10 +5,11 @@
 ### 功能概览
 
 - **对话式 REPL**：运行 `python main.py`，在命令行交互，提示符为 `You: `。
-- **Tool 调用**：模型可以自动调用 `bash`、`read_file`、`write_file`、`edit_file`、`TodoWrite` 等工具。
+- **Tool 调用**：支持 `bash`（含 `background=true` 后台任务）、`read_file`、`write_file`（支持 `append=true` 追加写）、`edit_file`、`TodoWrite`、`wait` 等工具。
 - **子 Agent（Tasks）**：内置 `explore` / `code` / `plan` 三种子 agent，通过 `Task` 工具为子任务单独开一轮对话。
 - **技能（Skills）**：通过 `Skill` 工具按需加载某个领域的 SKILL 文档，本仓库中保留了一个 `pdf` 示例技能。
-- **彩色输出**：用户输入、助手回复、工具调用、子 agent 活动、技能加载等都有不同的 ANSI 颜色，方便在终端快速分辨。
+- **后台任务与时间感知**：`bash(background=True)` 可启动后台任务，`JobManager` 追踪 PID 与日志，主循环在每轮注入“当前时间 + 后台任务状态”，并提供 `wait` 工具让 Agent 主动选择等待。
+- **彩色输出**：用户输入、助手回复、工具调用、子 agent 活动、技能加载、后台任务状态等都有不同的 ANSI 颜色，方便在终端快速分辨。
 
 ### 环境变量
 
@@ -36,14 +37,14 @@
   - `color(text, *codes)` 帮助函数。
 
 - **`tools/base.py`**：工具 schema 注册中心  
-  - 定义基础工具的 OpenAI tool schema（`bash`/`read_file`/`write_file`/`edit_file`/`TodoWrite`）  
+  - 定义基础工具的 OpenAI tool schema：`bash`（支持 `background`）、`read_file`、`write_file`（支持 `append`）、`edit_file`、`TodoWrite`、`wait`  
   - 从 `tasks.task_tool` 引入 `TASK_TOOL`，从 `skills.skill_tool` 引入 `SKILL_TOOL`  
   - 暴露统一的 `ALL_TOOLS` 和 `get_tools_for_agent()`。
 
 - **`tools/impl.py`**：工具实现  
-  - `run_bash` / `run_read` / `run_write` / `run_edit` / `run_todo` / `run_skill` / `run_task`  
-  - `execute_tool(name, args)`：统一分发入口  
-  - 内部使用 `tasks.agent_types` 中的 `AGENT_TYPES` 和 `tools.base.get_tools_for_agent()`。
+  - `run_bash`（支持后台任务 + JobManager 注册） / `run_read` / `run_write`（支持追加写） / `run_edit` / `run_todo` / `run_skill` / `run_task` / `run_wait`  
+  - `execute_tool(name, args)`：统一分发入口（分发到各个 run\_* 实现）  
+  - 内部使用 `tasks.agent_types` 中的 `AGENT_TYPES`、`tools.base.get_tools_for_agent()`、以及 `tools.job_manager.JOBS` 和 `tools.todo_manager.TODO`。
 
 - **`tasks/agent_types.py`**：子 Agent 配置  
   - `AGENT_TYPES`：定义 `explore` / `code` / `plan` 的描述、可用工具和提示词  
@@ -61,5 +62,11 @@
 
 - **`skills/pdf/SKILL.md`**：示例技能  
   - 展示一个典型 `SKILL.md` 的结构和用法，用于 PDF 相关任务的说明示例。
+
+- **`tools/job_manager.py`**：后台任务管理  
+  - `JobManager` / 全局单例 `JOBS`，负责记录后台任务的 `PID`、命令、日志路径、运行时长和状态，并在每轮对话中为 Agent 提供“后台任务状态摘要”。
+
+- **`tools/todo_manager.py`**：待办事项管理  
+  - `TodoManager` / 全局单例 `TODO`，用于 `TodoWrite` 工具更新和渲染当前的待办任务列表。
 
 

@@ -7,7 +7,7 @@ FG_BLUE = "\033[34m"
 FG_YELLOW = "\033[33m"
 FG_MAGENTA = "\033[35m"
 FG_BRIGHT_BLACK = "\033[90m"
-
+FG_RED = "\033[31m"
 
 def color(text: str, *codes: str) -> str:
     """Wrap text with ANSI color codes."""
