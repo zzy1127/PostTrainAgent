@@ -28,14 +28,42 @@ BASE_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read file contents.",
+            "description": "Read content from a file. ESSENTIAL for checking logs.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string"},
-                    "limit": {"type": "integer", "description": "Max lines to read"},
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of lines to read. IMPORTANT: Use a POSITIVE number (e.g., 50) to read the beginning (Head). Use a NEGATIVE number (e.g., -50) to read the END (Tail). Always use negative limits to check the latest progress of training logs!",
+                    }
                 },
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_datasets",
+            "description": "Search Hugging Face for datasets. Use this tool BEFORE writing training code to verify the dataset ID exists and is correct. Do not guess dataset names.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Keywords to search. For SFT, search for benchmark names (e.g., 'gsm8k') or domain keywords (e.g., 'math reasoning', 'instruction tuning')."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 5).",
+                        "default": 5
+                    }
+                },
+                "required": ["query"],
             },
         },
     },

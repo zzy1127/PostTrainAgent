@@ -94,15 +94,110 @@ def run_wait(seconds: int) -> str:
         f"Current Status: The wait is over. You should now verify the status of your background jobs using 'check_jobs' output or 'read_file' on logs."
     )
 
-def run_read(path: str, limit: int | None = None) -> str:
-    """Read file contents."""
+def run_read_file(path: str, limit: int | None = None) -> str:
+    """
+    读取文件内容。
+    核心逻辑：支持负数 limit 实现倒序读取（Tail）。
+    """
     try:
-        lines = safe_path(path).read_text(encoding="utf-8").splitlines()
-        if limit:
-            lines = lines[:limit]
-        return "\n".join(lines)[:50000]
+        # 1. 安全路径检查
+        try:
+            file_path = safe_path(path)
+        except Exception as e:
+            return f"Error: Invalid path security check - {e}"
+
+        if not file_path.exists():
+            return f"Error: File '{path}' does not exist."
+        
+        if not file_path.is_file():
+            return f"Error: '{path}' is a directory, not a file. Use 'ls -la' instead."
+
+        # 2. 读取文件 (处理编码错误)
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+            
+        total_lines = len(lines)
+        content = ""
+        view_info = ""
+
+        # 3. 切片逻辑
+        if limit is None:
+            # 全读 (由外部截断保护)
+            content = "".join(lines)
+            view_info = "(All content)"
+        elif limit > 0:
+            # 正序：读开头
+            content = "".join(lines[:limit])
+            view_info = f"(First {limit} lines)"
+        elif limit < 0:
+            # 倒序：读末尾 (Agent 的可观测性核心)
+            # 例如 limit=-50，读取最后 50 行
+            start_idx = max(0, total_lines + limit) 
+            content = "".join(lines[start_idx:])
+            view_info = f"(Last {abs(limit)} lines - TAIL MODE)"
+
+        # 4. 最终组装
+        # 加上 Total lines 提示，帮 Agent 建立文件大小的概念
+        output = f"== File: {path} ==\n"
+        output += f"== Meta: Total {total_lines} lines {view_info} ==\n"
+        output += f"== Content Start ==\n{content}\n== Content End =="
+        
+        # 兜底截断，防止 main.py 里的解析器爆掉
+        if len(output) > 50000:
+            return output[:25000] + "\n...[SYSTEM TRUNCATED DUE TO LENGTH]...\n" + output[-25000:]
+        
+        return output
+
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error reading file: {str(e)}"
+
+
+def run_search_datasets(query: str, limit: int = 5) -> str:
+    """
+    在 Hugging Face 搜索数据集。
+    """
+    try:
+        from huggingface_hub import HfApi
+        api = HfApi()
+        
+        # 按下载量排序，确保 Agent 搜到的是最主流的数据集
+        datasets = api.list_datasets(
+            search=query,
+            sort="downloads",
+            direction=-1,
+            limit=limit
+        )
+        
+        results = []
+        for d in datasets:
+            # 提取对 Agent 决策最有用的信息
+            desc = d.description if d.description else "No description available."
+            # 只取前 200 个字符，避免 Token 浪费
+            desc_preview = desc[:200].replace("\n", " ") + "..."
+            
+            info = (
+                f"- ID: {d.id}\n"
+                f"  Downloads: {d.downloads}\n"
+                f"  Likes: {d.likes}\n"
+                f"  Description: {desc_preview}"
+            )
+            results.append(info)
+            
+        if not results:
+            return f"No datasets found on Hugging Face for query: '{query}'"
+            
+        return (
+            f"Found {len(results)} datasets for '{query}' (Sorted by Downloads):\n"
+            "--------------------------------------------------\n" +
+            "\n\n".join(results) +
+            "\n--------------------------------------------------\n"
+            "TIP: Copy the 'ID' exactly into your training script."
+        )
+    
+    except ImportError:
+        return "Error: huggingface_hub library is not installed."
+    except Exception as e:
+        return f"Error searching Hugging Face: {str(e)}"
 
 def run_write(path: str, content: str, append: bool = False) -> str:
     """Write or append content to file."""
@@ -218,7 +313,9 @@ def execute_tool(name: str, args: dict) -> str:
     if name == "bash":
         return run_bash(args["command"], args.get("background", False))
     if name == "read_file":
-        return run_read(args["path"], args.get("limit"))
+        return run_read_file(args["path"], args.get("limit"))
+    if name == "search_datasets":
+        return run_search_datasets(args["query"], args.get("limit", 5))
     if name == "write_file":
         return run_write(args["path"], args["content"], args.get("append", False))
     if name == "edit_file":
@@ -234,6 +331,6 @@ def execute_tool(name: str, args: dict) -> str:
     return f"Unknown tool: {name}"
 
 __all__ = [
-    "TodoManager", "TODO", "safe_path", "run_bash", "run_read", 
+    "TodoManager", "TODO", "run_bash", "run_read_file", "run_search_datasets", "safe_path",
     "run_write", "run_edit", "run_todo", "run_skill", "run_task", "execute_tool"
 ]
