@@ -3,13 +3,13 @@ from tasks.agent_types import AGENT_TYPES
 from skills.skill_tool import SKILL_TOOL
 from tasks.task_tool import TASK_TOOL
 
-# 将 wait 混入基础工具集，不再特殊对待
+# 将 wait 混入基础工具集
 BASE_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Run shell command in 'zzy' conda environment. Use background=True for long-running tasks.",
+            "description": "Run shell command in the current environment. Use background=True for long-running tasks.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -43,7 +43,7 @@ BASE_TOOLS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Write or append content to a file.",
+            "description": "Write or append content to a file. Use this to create scripts or overwrite existing ones.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -63,7 +63,7 @@ BASE_TOOLS = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Replace exact text in a file.",
+            "description": "Replace exact text in a file. WARNING: 'old_text' must match the file content EXACTLY (including whitespace/newlines). If uncertain, use write_file to overwrite the whole file.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -122,27 +122,14 @@ BASE_TOOLS = [
     },
 ]
 
-# ALL_TOOLS 现在非常干净
 ALL_TOOLS = BASE_TOOLS + [TASK_TOOL, SKILL_TOOL]
 
 def get_tools_for_agent(agent_type: str) -> list[dict]:
     """Filter tools based on agent type."""
     allowed = AGENT_TYPES.get(agent_type, {}).get("tools", "*")
-    
-    # 1. 如果是全权限代理，直接给所有工具
     if allowed == "*":
         return ALL_TOOLS
-    
-    # 2. 如果是受限代理，在 BASE_TOOLS 里筛选
-    # (因为 wait 现在在 BASE_TOOLS 里了，所以它能被正确筛选出来！)
     tools = [t for t in BASE_TOOLS if t["function"]["name"] in allowed]
-    
     return tools
 
-__all__ = [
-    "BASE_TOOLS",
-    "TASK_TOOL",
-    "SKILL_TOOL",
-    "ALL_TOOLS",
-    "get_tools_for_agent",
-]
+__all__ = ["BASE_TOOLS", "TASK_TOOL", "SKILL_TOOL", "ALL_TOOLS", "get_tools_for_agent"]

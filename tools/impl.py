@@ -26,31 +26,24 @@ def run_bash(cmd: str, background: bool = False) -> str:
     if any(d in cmd for d in ["rm -rf /", "sudo", "shutdown"]):
         return "Error: Dangerous command"
     
+    # 移除 Conda 包装，直接在当前环境中执行
     try:
         if background:
             # 1. 构造日志文件名
             timestamp = int(time.time())
             log_file = f"nohup_{timestamp}.log"
             
-            # 2. 构造后台运行命令 (核心逻辑)
-            # 形式: nohup cmd > log 2>&1 & echo $!
-            # 这允许命令在后台运行，并将输出重定向到文件，最后打印 PID
+            # 2. 构造后台运行命令
+            # 直接使用 bash 执行，不需要 conda run
             bg_cmd = f"nohup {cmd} > {log_file} 2>&1 & echo $!"
             
-            # 3. 包装进 Conda 环境
-            # 使用 bash -c 确保内部的重定向和 & 符号被正确解释
-            wrapped_cmd = [
-                "conda", "run", "-n", "zzy", "--no-capture-output", 
-                "bash", "-c", bg_cmd
-            ]
-            
-            # 4. 执行 (此时 subprocess.run 会等待 'echo $!' 返回 PID 后立即结束，而不会等待后台任务)
+            # 3. 执行
             r = subprocess.run(
-                wrapped_cmd,
+                ["/bin/bash", "-c", bg_cmd],
                 cwd=WORKDIR,
                 capture_output=True,
                 text=True,
-                timeout=10 # 应该瞬间返回
+                timeout=10
             )
             
             if r.returncode != 0:
@@ -64,17 +57,16 @@ def run_bash(cmd: str, background: bool = False) -> str:
             
         else:
             # 前台阻塞运行
-            # 使用 bash -c 包装，以支持管道符 | 和重定向 >
-            safe_cmd = shlex.quote(cmd)
-            wrapped_cmd = f"conda run -n zzy --no-capture-output bash -c {safe_cmd}"
-            
+            # 直接调用 /bin/bash 执行命令
+            # 这样可以保留管道符 | 和重定向 > 的功能，同时继承当前容器的环境变量
             r = subprocess.run(
-                wrapped_cmd,
+                cmd,
                 shell=True,
                 cwd=WORKDIR,
                 capture_output=True,
                 text=True,
-                timeout=120, # 普通任务超时限制
+                timeout=120,
+                executable="/bin/bash" 
             )
             return ((r.stdout + r.stderr).strip() or "(no output)")[:50000]
             
